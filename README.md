@@ -6,7 +6,7 @@
 
 ## 기술 스택
 
-- **Java 21**, **Spring Boot 3.x**
+- **Java 21**, **Spring Boot 3.2.6**
 - **Undertow** (Tomcat 제외), **Virtual Threads**
 - **H2** (로컬), **Flyway**
 - **Caffeine** (로컬 캐시), **Resilience4j** (Circuit Breaker / Retry / Bulkhead)

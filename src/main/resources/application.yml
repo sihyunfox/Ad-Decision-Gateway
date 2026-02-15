@@ -1,0 +1,197 @@
+# =============================================================================
+# ADG (Ad Decision Gateway) — 목표 RPS: 5,000 / 동시 요청 100+ 부하 테스트 대응
+# Virtual Thread + Undertow 기준으로 고성능 검증용 튜닝.
+# =============================================================================
+
+spring:
+  application:
+    name: ad-decision-gateway
+
+  # --- 스레드: Java 21 가상 스레드 ---
+  # 요청당 1 가상 스레드로 동시 처리량 확대. 5k RPS 수용 시 플랫폼 스레드 풀 대비 유리.
+  threads:
+    virtual:
+      enabled: true
+
+  # --- 데이터소스 (HikariCP) ---
+  # 동시 100+ 요청 시 connection 대기·타임아웃 방지. 풀·유휴·대기시간 상향.
+  datasource:
+    url: jdbc:h2:mem:adg;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+    hikari:
+      maximum-pool-size: 150         # 동시 100+ 부하 시 여유
+      minimum-idle: 30               # 유휴 연결로 즉시 할당
+      connection-timeout: 8000       # 풀 대기(ms). 피크 시 8초까지 대기
+      idle-timeout: 600000           # 10분
+      max-lifetime: 1800000          # 30분
+
+  # --- JPA / Hibernate ---
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+        default_schema: public
+        jdbc:
+          batch_size: 50             # 5k RPS 시 배치 INSERT/UPDATE 효율
+    open-in-view: false              # OSIV 비활성화로 N+1·긴 트랜잭션 방지
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+  h2:
+    console:
+      enabled: true
+
+# --- Undertow (WAS) — 부하 시 수락·디스패치 여유 확보 ---
+# worker: 동시 연결 수락 후 가상 스레드 디스패치. 부하 시 큐 대기 감소.
+server:
+  port: 8080
+  shutdown: graceful
+  undertow:
+    threads:
+      io: 8                          # I/O 스레드. 부하 시 연결·읽기/쓰기 병렬 처리
+      worker: 768                    # 동시 수락·디스패치 상한 상향 (512→768)
+    buffer-size: 16384               # 16KB
+    direct-buffers: true
+
+# --- Resilience4j — 5k RPS 시 downstream 보호. 일시적 스파이크/소량 테스트에서 OPEN 방지 ---
+resilience4j:
+  circuitbreaker:
+    instances:
+      profile:
+        register-health-indicator: true
+        sliding-window-size: 200     # 5k RPS 대비 샘플 수 확대
+        failure-rate-threshold: 70   # 50→70: 대부분 실패할 때만 OPEN
+        minimum-number-of-calls: 200 # 최소 200회 후 실패율 계산 (소량 테스트 시 회로 미개방)
+        wait-duration-in-open-state: 5s
+      campaign:
+        register-health-indicator: true
+        sliding-window-size: 200
+        failure-rate-threshold: 70
+        minimum-number-of-calls: 200
+        wait-duration-in-open-state: 5s
+      policy:
+        register-health-indicator: true
+        sliding-window-size: 200
+        failure-rate-threshold: 70
+        minimum-number-of-calls: 200
+        wait-duration-in-open-state: 5s
+      cap:
+        register-health-indicator: true
+        sliding-window-size: 200
+        failure-rate-threshold: 70
+        minimum-number-of-calls: 200
+        wait-duration-in-open-state: 5s
+  retry:
+    instances:
+      profile:
+        max-attempts: 2
+        wait-duration: 30ms          # 5k RPS 시 재시도 지연 최소화
+      campaign:
+        max-attempts: 2
+        wait-duration: 30ms
+      policy:
+        max-attempts: 2
+        wait-duration: 30ms
+      cap:
+        max-attempts: 2
+        wait-duration: 30ms
+  bulkhead:
+    instances:
+      profile:
+        max-concurrent-calls: 800    # executor 800과 맞춰 downstream 병렬 상한
+      campaign:
+        max-concurrent-calls: 800
+      policy:
+        max-concurrent-calls: 800
+      cap:
+        max-concurrent-calls: 800
+
+# --- Actuator / 메트릭 ---
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+# --- OpenAPI (Swagger) ---
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /docs
+    enabled: true
+
+# --- ADG 애플리케이션 설정 ---
+app:
+  mock:
+    enabled: true
+    base-url: http://localhost:8080
+
+  # Downstream HTTP 호출: 5k RPS 시 빠른 실패로 리소스 확보
+  http:
+    connect-timeout-ms: 100         # TCP 연결 타임아웃(ms)
+    read-timeout-ms: 300             # 읽기 타임아웃(ms). P95 목표 내 유지
+
+  # Decision 파이프라인: Profile/Campaign/Policy/Cap은 DB+캐시(DataLoadStage). false=DB 어댑터, true=HTTP mock 어댑터.
+  decision:
+    use-http-dependencies: false
+    fallback-return-503: false
+    executor:
+      core-pool-size: 600             # 상시 스레드. 부하 시 즉시 처리
+      max-pool-size: 800              # 동시 200 요청까지 4× 태스크 병렬 처리
+      queue-capacity: 4096            # 대기 큐 확대. 초과 시 CallerRunsPolicy
+
+  # 인메모리 이벤트 큐: 이력·로그성 이벤트 적재 후 주기 drain → 파일(또는 Kafka). DB 미사용.
+  event-queue:
+    capacity: 50000
+    drain-interval-ms: 500
+    drain-batch-size: 500
+    shutdown-drain-timeout-sec: 30
+    event-file: logs/events.ndjson   # Drainer가 한 줄씩 NDJSON append
+    backlog-warning-threshold: 5000  # Health 경고 기준
+
+  auth:
+    dev-mode: false              # true: API 키 검증 비활성화(로컬/개발용). false: X-API-Key 필수
+    api-keys:
+      default: adg-client-key
+    admin-key: adg-admin-key
+    public-paths:
+      - /mock/
+      - /actuator/
+      - /docs
+      - /v3/api-docs
+      - /swagger-ui
+      - /v1/decision   # OpenRTB: 인증 없음
+      - /v1/events     # OpenRTB: 인증 없음
+
+# --- 로깅: 기능별 파일 분리(logback-spring.xml). 일반 로그는 DB 미저장 ---
+# 파일: logs/decision.log, event.log, admin.log, event-queue.log, request.log, error.log
+logging:
+  file:
+    path: logs              # 로그 디렉터리. archive/ 하위에 일별 롤링 보관
+  level:
+    root: INFO
+    com.adg: INFO
+    org.springframework.web: INFO
+
+# Kafka 로그 전송 샘플: spring.profiles.active=kafka 시 logback에서 해당 토픽으로 전송
+# app:
+#   logging:
+#     kafka:
+#       enabled: true
+#       topic: app-logs
+#       bootstrap-servers: localhost:9092

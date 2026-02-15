@@ -1,0 +1,4 @@
+# 개발/로컬용 프로파일. API 키 검증 비활성화.
+app:
+  auth:
+    dev-mode: true

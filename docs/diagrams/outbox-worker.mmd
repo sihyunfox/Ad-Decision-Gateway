@@ -1,0 +1,22 @@
+%% 참고: 현재 구현은 event-queue-drain.mmd. 아래는 확장 시 DB Outbox/Worker 설계.
+flowchart LR
+    subgraph writers [Writers]
+        D[Decision API]
+        E[Event API]
+        P[Policy API]
+    end
+    subgraph storage [Storage]
+        Outbox[(outbox table)]
+    end
+    subgraph worker [Worker]
+        Poll[Poll PENDING]
+        Process[Process]
+        Update[SENT / FAILED]
+    end
+    D --> Outbox
+    E --> Outbox
+    P --> Outbox
+    Outbox --> Poll
+    Poll --> Process
+    Process --> Update
+    Update --> Outbox

@@ -1,0 +1,37 @@
+sequenceDiagram
+    participant Client
+    participant API as ADG API
+    participant Pipeline
+    participant Validation
+    participant Filtering
+    participant Selection
+    participant Exposure
+    participant Profile
+    participant Campaign
+    participant Policy
+    participant Cap
+    participant EventQueue as EventQueue
+    participant Drainer as EventQueueDrainer
+    participant File as File_NDJSON
+
+    Client->>API: POST /v1/decision
+    API->>API: traceId, clientId, BidRequest 검증
+    par
+        API->>Profile: getProfile(userId)
+        API->>Campaign: getCampaigns(placementId)
+        API->>Policy: getPolicies(clientId)
+        API->>Cap: check(request)
+    end
+    API->>API: context 구성 (candidates, capResponse)
+    API->>Pipeline: run(context)
+    Pipeline->>Validation: validate(context)
+    Pipeline->>Filtering: filter(context)
+    Pipeline->>Selection: select(context)
+    Pipeline->>Exposure: prepareForExposure(context)
+    Pipeline-->>API: context
+    API->>API: winner/house ad, DecisionRecord, BidResponse 생성
+    API->>EventQueue: decision-created 1건 append
+    API->>Client: BidResponse
+    Note over Drainer,File: 주기 drain. 확장 시 DB(decision_history, bid_responses) 저장 가능
+    Drainer->>EventQueue: drain (주기)
+    Drainer->>File: NDJSON 한 줄씩 기록

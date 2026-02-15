@@ -1,0 +1,18 @@
+flowchart LR
+    subgraph writers [Writers]
+        D[Decision API]
+        E[Event API]
+        P[Policy API]
+    end
+    subgraph queue [Event Queue]
+        InMemory[InMemoryEventQueue]
+    end
+    subgraph drain [Drain]
+        Drainer[EventQueueDrainer]
+        File[File NDJSON]
+    end
+    D --> InMemory
+    E --> InMemory
+    P --> InMemory
+    InMemory --> Drainer
+    Drainer --> File

@@ -1,0 +1,243 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ADG 로깅: logback-spring.xml
+  - 일반 로그는 DB에 저장하지 않음. 기능별 로그 파일 + 콘솔(JSON).
+  - 감사 로그(Audit)는 애플리케이션에서 audit_log 테이블에 직접 기록.
+  - 기능별 파일: decision, event, admin, event-queue, request, error(전체 ERROR).
+-->
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+
+    <springProperty name="LOG_PATH" source="logging.file.path" defaultValue="logs"/>
+    <springProperty name="LOG_KAFKA_TOPIC" source="app.logging.kafka.topic" defaultValue="app-logs"/>
+    <springProperty name="LOG_KAFKA_BOOTSTRAP" source="app.logging.kafka.bootstrap-servers" defaultValue="localhost:9092"/>
+
+    <!-- 공통: 콘솔 JSON (비동기) -->
+    <appender name="JSON_ASYNC" class="ch.qos.logback.classic.AsyncAppender">
+        <queueSize>1024</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <includeCallerData>false</includeCallerData>
+        <neverBlock>true</neverBlock>
+        <appender-ref ref="JSON"/>
+    </appender>
+    <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <includeMdcKeyName>traceId</includeMdcKeyName>
+            <includeMdcKeyName>requestId</includeMdcKeyName>
+            <includeMdcKeyName>clientId</includeMdcKeyName>
+            <includeMdcKeyName>decisionId</includeMdcKeyName>
+            <includeMdcKeyName>fallbackUsed</includeMdcKeyName>
+        </encoder>
+    </appender>
+
+    <!-- 공통: Rolling 정책 (일 단위, 7일 보관) -->
+    <property name="ROLLING_PATTERN" value="${LOG_PATH}/%d{yyyy-MM-dd}"/>
+    <property name="COMMON_POLICY" value="
+        &lt;rollingPolicy class=\&quot;ch.qos.logback.core.rolling.TimeBasedRollingPolicy\&quot;&gt;
+            &lt;fileNamePattern&gt;${LOG_PATH}/archive/%d{yyyy-MM-dd}/%i.log&lt;/fileNamePattern&gt;
+            &lt;timeBasedFileNamingAndTriggeringPolicy class=\&quot;ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP\&quot;&gt;
+                &lt;maxFileSize&gt;100MB&lt;/maxFileSize&gt;
+            &lt;/timeBasedFileNamingAndTriggeringPolicy&gt;
+            &lt;maxHistory&gt;7&lt;/maxHistory&gt;
+        &lt;/rollingPolicy&gt;"/>
+
+    <!-- 1) Decision: 의사결정 API/파이프라인 -->
+    <appender name="FILE_DECISION" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_PATH}/decision.log</file>
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <includeMdcKeyName>traceId</includeMdcKeyName>
+            <includeMdcKeyName>requestId</includeMdcKeyName>
+            <includeMdcKeyName>clientId</includeMdcKeyName>
+            <includeMdcKeyName>decisionId</includeMdcKeyName>
+            <includeMdcKeyName>fallbackUsed</includeMdcKeyName>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_PATH}/archive/decision-%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+            <timeBasedFileNamingAndTriggeringPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
+                <maxFileSize>100MB</maxFileSize>
+            </timeBasedFileNamingAndTriggeringPolicy>
+            <maxHistory>7</maxHistory>
+        </rollingPolicy>
+    </appender>
+    <appender name="FILE_DECISION_ASYNC" class="ch.qos.logback.classic.AsyncAppender">
+        <queueSize>1024</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <neverBlock>true</neverBlock>
+        <appender-ref ref="FILE_DECISION"/>
+    </appender>
+
+    <!-- 2) Event: 노출/클릭 이벤트 수집 -->
+    <appender name="FILE_EVENT" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_PATH}/event.log</file>
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <includeMdcKeyName>traceId</includeMdcKeyName>
+            <includeMdcKeyName>requestId</includeMdcKeyName>
+            <includeMdcKeyName>clientId</includeMdcKeyName>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_PATH}/archive/event-%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+            <timeBasedFileNamingAndTriggeringPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
+                <maxFileSize>100MB</maxFileSize>
+            </timeBasedFileNamingAndTriggeringPolicy>
+            <maxHistory>7</maxHistory>
+        </rollingPolicy>
+    </appender>
+    <appender name="FILE_EVENT_ASYNC" class="ch.qos.logback.classic.AsyncAppender">
+        <queueSize>512</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <neverBlock>true</neverBlock>
+        <appender-ref ref="FILE_EVENT"/>
+    </appender>
+
+    <!-- 3) Admin: 정책/관리 API -->
+    <appender name="FILE_ADMIN" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_PATH}/admin.log</file>
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <includeMdcKeyName>traceId</includeMdcKeyName>
+            <includeMdcKeyName>requestId</includeMdcKeyName>
+            <includeMdcKeyName>clientId</includeMdcKeyName>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_PATH}/archive/admin-%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+            <timeBasedFileNamingAndTriggeringPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
+                <maxFileSize>50MB</maxFileSize>
+            </timeBasedFileNamingAndTriggeringPolicy>
+            <maxHistory>30</maxHistory>
+        </rollingPolicy>
+    </appender>
+    <appender name="FILE_ADMIN_ASYNC" class="ch.qos.logback.classic.AsyncAppender">
+        <queueSize>256</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <neverBlock>true</neverBlock>
+        <appender-ref ref="FILE_ADMIN"/>
+    </appender>
+
+    <!-- 4) Event queue: 이벤트 큐/Drainer/Shutdown 처리 로그 -->
+    <appender name="FILE_EVENT_QUEUE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_PATH}/event-queue.log</file>
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder"/>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_PATH}/archive/event-queue-%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+            <timeBasedFileNamingAndTriggeringPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
+                <maxFileSize>50MB</maxFileSize>
+            </timeBasedFileNamingAndTriggeringPolicy>
+            <maxHistory>7</maxHistory>
+        </rollingPolicy>
+    </appender>
+    <appender name="FILE_EVENT_QUEUE_ASYNC" class="ch.qos.logback.classic.AsyncAppender">
+        <queueSize>256</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <neverBlock>true</neverBlock>
+        <appender-ref ref="FILE_EVENT_QUEUE"/>
+    </appender>
+
+    <!-- 5) Request: 요청 완료/트레이스 (RequestLoggingFilter, TraceFilter) -->
+    <appender name="FILE_REQUEST" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_PATH}/request.log</file>
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <includeMdcKeyName>traceId</includeMdcKeyName>
+            <includeMdcKeyName>requestId</includeMdcKeyName>
+            <includeMdcKeyName>clientId</includeMdcKeyName>
+            <includeMdcKeyName>decisionId</includeMdcKeyName>
+            <includeMdcKeyName>fallbackUsed</includeMdcKeyName>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_PATH}/archive/request-%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+            <timeBasedFileNamingAndTriggeringPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
+                <maxFileSize>100MB</maxFileSize>
+            </timeBasedFileNamingAndTriggeringPolicy>
+            <maxHistory>7</maxHistory>
+        </rollingPolicy>
+    </appender>
+    <appender name="FILE_REQUEST_ASYNC" class="ch.qos.logback.classic.AsyncAppender">
+        <queueSize>1024</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <neverBlock>true</neverBlock>
+        <appender-ref ref="FILE_REQUEST"/>
+    </appender>
+
+    <!-- 6) Error: 전역 ERROR 전용 (모든 패키지) -->
+    <appender name="FILE_ERROR" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_PATH}/error.log</file>
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>ERROR</level>
+        </filter>
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <includeMdcKeyName>traceId</includeMdcKeyName>
+            <includeMdcKeyName>requestId</includeMdcKeyName>
+            <includeMdcKeyName>clientId</includeMdcKeyName>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_PATH}/archive/error-%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+            <timeBasedFileNamingAndTriggeringPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
+                <maxFileSize>100MB</maxFileSize>
+            </timeBasedFileNamingAndTriggeringPolicy>
+            <maxHistory>30</maxHistory>
+        </rollingPolicy>
+    </appender>
+    <appender name="FILE_ERROR_ASYNC" class="ch.qos.logback.classic.AsyncAppender">
+        <queueSize>512</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <neverBlock>true</neverBlock>
+        <appender-ref ref="FILE_ERROR"/>
+    </appender>
+
+    <!-- Kafka 전송 (선택) -->
+    <appender name="KAFKA" class="com.adg.config.logging.KafkaLogbackAppender">
+        <topic>${LOG_KAFKA_TOPIC}</topic>
+        <bootstrapServers>${LOG_KAFKA_BOOTSTRAP}</bootstrapServers>
+    </appender>
+    <appender name="KAFKA_ASYNC" class="ch.qos.logback.classic.AsyncAppender">
+        <queueSize>512</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <neverBlock>true</neverBlock>
+        <appender-ref ref="KAFKA"/>
+    </appender>
+
+    <!-- 로거: 기능별 파일 + 콘솔 (additivity=true → root에도 전달되어 콘솔 출력) -->
+    <logger name="com.adg.decision" level="INFO" additivity="true">
+        <appender-ref ref="FILE_DECISION_ASYNC"/>
+    </logger>
+    <logger name="com.adg.shared.adapter.client" level="INFO" additivity="true">
+        <appender-ref ref="FILE_DECISION_ASYNC"/>
+    </logger>
+
+    <logger name="com.adg.event" level="INFO" additivity="true">
+        <appender-ref ref="FILE_EVENT_ASYNC"/>
+    </logger>
+
+    <logger name="com.adg.admin" level="INFO" additivity="true">
+        <appender-ref ref="FILE_ADMIN_ASYNC"/>
+    </logger>
+    <logger name="com.adg.shared.adapter.persistence.AuditLogPortAdapter" level="INFO" additivity="true">
+        <appender-ref ref="FILE_ADMIN_ASYNC"/>
+    </logger>
+
+    <logger name="com.adg.shared.adapter.eventqueue" level="INFO" additivity="true">
+        <appender-ref ref="FILE_EVENT_QUEUE_ASYNC"/>
+    </logger>
+
+    <logger name="com.adg.shared.adapter.web.RequestLoggingFilter" level="INFO" additivity="true">
+        <appender-ref ref="FILE_REQUEST_ASYNC"/>
+    </logger>
+    <logger name="com.adg.shared.adapter.web.TraceFilter" level="INFO" additivity="true">
+        <appender-ref ref="FILE_REQUEST_ASYNC"/>
+    </logger>
+
+    <!-- Root: 콘솔 + 전역 ERROR 파일. Kafka는 프로파일 kafka 시에만 -->
+    <springProfile name="!kafka">
+        <root level="INFO">
+            <appender-ref ref="JSON_ASYNC"/>
+            <appender-ref ref="FILE_ERROR_ASYNC"/>
+        </root>
+    </springProfile>
+    <springProfile name="kafka">
+        <root level="INFO">
+            <appender-ref ref="JSON_ASYNC"/>
+            <appender-ref ref="FILE_ERROR_ASYNC"/>
+            <appender-ref ref="KAFKA_ASYNC"/>
+        </root>
+    </springProfile>
+
+    <logger name="com.adg" level="INFO"/>
+</configuration>

@@ -1,0 +1,7 @@
+# DataJpaTest 전용: Flyway 없이 엔티티로 스키마 생성/삭제
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+  flyway:
+    enabled: false

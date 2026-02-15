@@ -1,0 +1,22 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+  flyway:
+    enabled: false
+
+app:
+  mock:
+    enabled: true
+    base-url: http://localhost:${server.port:8080}
+  auth:
+    api-keys:
+      default: adg-client-key
+    admin-key: adg-admin-key
+
+logging:
+  level:
+    root: WARN
+    com.adg: INFO

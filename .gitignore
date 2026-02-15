@@ -1,0 +1,37 @@
+# Build
+build/
+out/
+target/
+
+# Gradle
+.gradle/
+!gradle/wrapper/gradle-wrapper.jar
+
+.cursor/
+# Logs and runtime
+logs/
+*.log
+
+# IDE and editors
+.idea/
+*.iml
+.vscode/
+.cursor/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Class and backup
+*.class
+*.bak
+*.swp
+*~
+
+# Local env (optional)
+.env
+.env.local
+
+# H2 DB files (when using file-based DB)
+*.db
+*.trace.db

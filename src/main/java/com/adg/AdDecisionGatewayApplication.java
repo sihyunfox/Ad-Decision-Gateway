@@ -1,7 +1,9 @@
 package com.adg;
 
+import com.adg.config.PartnerExtPolicyProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
@@ -18,6 +20,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  */
 @SpringBootApplication
 @EnableScheduling
+@EnableConfigurationProperties(PartnerExtPolicyProperties.class)
 public class AdDecisionGatewayApplication {
 
     public static void main(String[] args) {

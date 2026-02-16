@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.Map;
+
 /**
  * OpenRTB 2.x App 객체.
  */
@@ -20,4 +22,6 @@ public class App {
     private String domain;
     private String ver;
     private Publisher publisher;
+    /** OpenRTB 2.x 확장 (파트너별 커스텀) */
+    private Map<String, Object> ext;
 }

@@ -7,6 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.util.Map;
 
 /**
  * OpenRTB 2.x Bid 객체 (SeatBid 내).
@@ -36,4 +37,6 @@ public class Bid {
     private String iurl;
     /** 캠페인 ID */
     private String cid;
+    /** OpenRTB 2.x 확장 (파트너별 커스텀) */
+    private Map<String, Object> ext;
 }

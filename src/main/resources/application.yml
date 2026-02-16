@@ -164,6 +164,13 @@ app:
     event-file: logs/events.ndjson   # Drainer가 한 줄씩 NDJSON append
     backlog-warning-threshold: 5000  # Health 경고 기준
 
+  openrtb:
+    require-site-or-app: false   # true면 site 또는 app 중 하나 필수(권장 검증)
+
+  partner:
+    header-name: X-Partner-Id    # 파트너 ID 헤더. 없으면 source.ext.partner_id 또는 request.ext.partner_id, 최종 default
+    policies: {}                 # partnerId별 정책. 예: default: { response-ext: {} }; partner-a: { request-required-keys: [foo], response-ext: { deal_id: "x" } }
+
   auth:
     dev-mode: false              # true: API 키 검증 비활성화(로컬/개발용). false: X-API-Key 필수
     api-keys:

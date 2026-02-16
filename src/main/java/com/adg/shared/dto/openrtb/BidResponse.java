@@ -7,6 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * OpenRTB 2.x Bid Response (DSP 응답).
@@ -27,4 +28,6 @@ public class BidResponse {
     private String cur;
     /** 필수. SeatBid 목록 */
     private List<SeatBid> seatbid;
+    /** OpenRTB 2.x 확장 (파트너별 커스텀) */
+    private Map<String, Object> ext;
 }

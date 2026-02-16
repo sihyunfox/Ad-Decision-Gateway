@@ -9,6 +9,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * OpenRTB 2.x Bid Request (DSP 수신).
@@ -31,6 +32,7 @@ public class BidRequest {
 
     private Site site;
     private App app;
+    private Source source;
     private Device device;
     private User user;
 
@@ -42,4 +44,6 @@ public class BidRequest {
     private List<String> cur;
     /** 허용 seat(광고주) ID */
     private List<String> wseat;
+    /** OpenRTB 2.x 확장 (파트너별 커스텀) */
+    private Map<String, Object> ext;
 }

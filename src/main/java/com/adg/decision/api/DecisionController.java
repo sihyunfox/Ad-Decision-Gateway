@@ -1,6 +1,9 @@
 package com.adg.decision.api;
 
 import com.adg.decision.app.DecisionService;
+import com.adg.decision.partner.PartnerExtRequestValidator;
+import com.adg.decision.partner.PartnerExtResponseEnricher;
+import com.adg.decision.partner.PartnerResolver;
 import com.adg.shared.adapter.web.AuthFilter;
 import com.adg.shared.dto.openrtb.BidRequest;
 import com.adg.shared.dto.openrtb.BidResponse;
@@ -23,12 +26,21 @@ import org.springframework.web.bind.annotation.*;
 public class DecisionController {
 
     private final DecisionService decisionService;
+    private final PartnerResolver partnerResolver;
+    private final PartnerExtRequestValidator partnerExtRequestValidator;
+    private final PartnerExtResponseEnricher partnerExtResponseEnricher;
 
     @Value("${app.decision.fallback-return-503:false}")
     private boolean fallbackReturn503;
 
-    public DecisionController(DecisionService decisionService) {
+    public DecisionController(DecisionService decisionService,
+                              PartnerResolver partnerResolver,
+                              PartnerExtRequestValidator partnerExtRequestValidator,
+                              PartnerExtResponseEnricher partnerExtResponseEnricher) {
         this.decisionService = decisionService;
+        this.partnerResolver = partnerResolver;
+        this.partnerExtRequestValidator = partnerExtRequestValidator;
+        this.partnerExtResponseEnricher = partnerExtResponseEnricher;
     }
 
     /** OpenRTB Bid Request를 받아 의사결정 후 Bid Response 반환. clientId는 필터에서 설정된 값(또는 openrtb) 사용. */
@@ -42,7 +54,10 @@ public class DecisionController {
         if (clientId == null) {
             clientId = "openrtb";
         }
+        String partnerId = partnerResolver.resolve(httpRequest, request);
+        partnerExtRequestValidator.validate(request, partnerId);
         BidResponse response = decisionService.decide(request, clientId);
+        response = partnerExtResponseEnricher.enrich(response, partnerId);
         boolean fallbackUsed = isFallbackResponse(response);
         if (response.getSeatbid() != null && !response.getSeatbid().isEmpty()
                 && response.getSeatbid().get(0).getBid() != null && !response.getSeatbid().get(0).getBid().isEmpty()) {

@@ -3,6 +3,7 @@ package com.adg.decision.app;
 import com.adg.config.AdgMetrics;
 import com.adg.decision.pipeline.AdDecisionPipeline;
 import com.adg.decision.pipeline.AdDecisionPipelineContext;
+import com.adg.decision.validation.OpenRtb26Validator;
 import com.adg.shared.dto.*;
 import com.adg.shared.dto.openrtb.BidRequest;
 import com.adg.shared.dto.openrtb.BidResponse;
@@ -34,13 +35,16 @@ public class DecisionService {
     private final ObjectMapper objectMapper;
     private final AdgMetrics metrics;
     private final AdDecisionPipeline pipeline;
+    private final OpenRtb26Validator openRtb26Validator;
 
     public DecisionService(EventQueuePort eventQueuePort, ObjectMapper objectMapper,
-                           AdgMetrics metrics, AdDecisionPipeline pipeline) {
+                           AdgMetrics metrics, AdDecisionPipeline pipeline,
+                           OpenRtb26Validator openRtb26Validator) {
         this.eventQueuePort = eventQueuePort;
         this.objectMapper = objectMapper;
         this.metrics = metrics;
         this.pipeline = pipeline;
+        this.openRtb26Validator = openRtb26Validator;
     }
 
     /**
@@ -50,6 +54,7 @@ public class DecisionService {
      * @return OpenRTB 2.x Bid Response (seatbid[].bid[] 포함)
      */
     public BidResponse decide(BidRequest bidRequest, String clientId) {
+        openRtb26Validator.validate(bidRequest);
         DecisionRequest request = OpenRtbMapper.toDecisionRequest(bidRequest);
         request.setClientId(clientId);
 

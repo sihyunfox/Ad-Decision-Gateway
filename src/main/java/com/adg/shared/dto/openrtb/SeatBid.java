@@ -7,6 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * OpenRTB 2.x SeatBid 객체.
@@ -22,4 +23,6 @@ public class SeatBid {
     private String seat;
     /** 필수. Bid 목록 */
     private List<Bid> bid;
+    /** OpenRTB 2.x 확장 (파트너별 커스텀) */
+    private Map<String, Object> ext;
 }
